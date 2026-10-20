@@ -1,21 +1,21 @@
 """
-Module 1 : acquisition des données.
+Module 1: data acquisition.
 
-Récupère l'historique horaire (prix + volume) de 5 actifs via l'API publique CoinGecko :
-    - ETH, stETH   (LST)
+Downloads hourly history (price + volume) for 5 assets from the public CoinGecko API:
+    - ETH, stETH   (liquid staking token)
     - USDC, USDT   (stablecoins)
     - AAVE         (DeFi)
 
-Contrainte de l'API gratuite : historique limité aux 365 derniers jours, et
-granularité horaire uniquement pour des requêtes <= 90 jours (au-delà, l'API renvoie
-des points journaliers). Chaque actif est donc récupéré en 5 tronçons de 73 jours.
+Free-API constraint: history is limited to the last 365 days, and hourly granularity is
+only returned for requests of 90 days or less (beyond that, the API returns daily points).
+Each asset is therefore downloaded in 5 chunks of 73 days.
 
-Remarque : la colonne `volume_usd` renvoyée par CoinGecko est un volume 24h glissant,
-agrégé sur toutes les places de marché (pas le volume d'un pool donné).
+Note: the `volume_usd` column returned by CoinGecko is a rolling 24h volume aggregated
+across all venues (not the volume of a given pool).
 
-Usage (depuis la racine du dépôt) :
+Usage (from the repository root):
     python src/fetch_coingecko.py
-Les CSV fournis dans data/ ont été obtenus avec ce script (fenêtre sept. 2025 – sept. 2026).
+The CSV files provided in data/ were produced with this script (window Sept 2025 - Sept 2026).
 """
 
 import time
@@ -37,7 +37,7 @@ TOTAL_DAYS = 364
 CHUNK_DAYS = 73
 VS_CURRENCY = "usd"
 BASE_URL = "https://api.coingecko.com/api/v3/coins/{id}/market_chart/range"
-REQUEST_DELAY_SECONDS = 8   # limite de débit de l'API gratuite
+REQUEST_DELAY_SECONDS = 8   # rate limit of the free API
 
 
 def fetch_chunk(coin_id: str, from_ts: int, to_ts: int, retries=3, backoff=5) -> dict:
@@ -50,7 +50,7 @@ def fetch_chunk(coin_id: str, from_ts: int, to_ts: int, retries=3, backoff=5) ->
             if "prices" in data:
                 return data
         time.sleep(backoff * (attempt + 1))
-    raise RuntimeError(f"Échec de récupération pour {coin_id} sur [{from_ts}, {to_ts}]")
+    raise RuntimeError(f"Download failed for {coin_id} on [{from_ts}, {to_ts}]")
 
 
 def fetch_coin_hourly(coin_id: str) -> pd.DataFrame:
@@ -75,9 +75,9 @@ def fetch_coin_hourly(coin_id: str) -> pd.DataFrame:
 if __name__ == "__main__":
     DATA_DIR.mkdir(exist_ok=True)
     for coin_id, out_name in COINS.items():
-        print(f"Récupération de {coin_id}...")
+        print(f"Downloading {coin_id}...")
         df = fetch_coin_hourly(coin_id)
         df.to_csv(DATA_DIR / f"{out_name}.csv", index=False)
-        print(f"  -> {len(df)} lignes dans data/{out_name}.csv "
-              f"({pd.to_datetime(df['timestamp_ms'].iloc[0], unit='ms')} → "
+        print(f"  -> {len(df)} rows in data/{out_name}.csv "
+              f"({pd.to_datetime(df['timestamp_ms'].iloc[0], unit='ms')} -> "
               f"{pd.to_datetime(df['timestamp_ms'].iloc[-1], unit='ms')})")

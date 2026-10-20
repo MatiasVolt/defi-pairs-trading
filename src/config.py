@@ -1,12 +1,12 @@
 """
-Paramètres globaux du projet, partagés par tous les modules.
+Global settings shared by every module.
 
-Le point clé est le découpage temporel :
-  - période d'APPRENTISSAGE (in-sample) : les 2/3 les plus anciens de l'historique.
-    Tout ce qui est estimé (hedge ratio, test ADF, paramètres Ornstein-Uhlenbeck,
-    choix du seuil d'entrée, poids du portefeuille) l'est UNIQUEMENT sur cette période ;
-  - période de TEST (out-of-sample) : le 1/3 le plus récent, jamais utilisé pour
-    calibrer quoi que ce soit. C'est la seule période dont la performance compte.
+The key point is the time split:
+  - TRAINING period (in-sample): the oldest 2/3 of the history. Everything that is
+    estimated (hedge ratio, ADF test, Ornstein-Uhlenbeck parameters, entry threshold,
+    portfolio weights) is estimated on this period ONLY;
+  - TEST period (out-of-sample): the most recent 1/3, never used to calibrate anything.
+    It is the only period whose performance matters.
 """
 
 from pathlib import Path
@@ -15,15 +15,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 OUTPUT_DIR = ROOT / "outputs"
 
-TRAIN_FRAC = 2 / 3            # part de l'historique utilisée pour la calibration
-EXECUTION_LAG_HOURS = 1       # délai entre le signal et l'exécution du trade (0 = exécution au prix du signal)
-TOTAL_CAPITAL_USD = 100_000.0 # capital total supposé
-RANDOM_SEED = 42              # reproductibilité du tirage stochastique du gas
-PERIODS_PER_YEAR = 24 * 365   # données horaires
+TRAIN_FRAC = 2 / 3            # share of the history used for calibration
+EXECUTION_LAG_HOURS = 1       # delay between signal and trade execution (0 = trade at the signal price)
+TOTAL_CAPITAL_USD = 100_000.0 # assumed total capital
+RANDOM_SEED = 42              # reproducibility of the stochastic gas draws
+PERIODS_PER_YEAR = 24 * 365   # hourly data
 
 
 def split_timestamp(index):
-    """Premier horodatage de la période de test."""
+    """First timestamp of the test period."""
     return index[int(len(index) * TRAIN_FRAC)]
 
 

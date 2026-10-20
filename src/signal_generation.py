@@ -1,17 +1,17 @@
 """
-Module 3 : génération du signal (bandes dynamiques EWMA).
+Module 3: signal generation (dynamic EWMA bands).
 
-Remplace les seuils z-score statiques de l'article original (calculés une fois sur
-tout l'historique) par une moyenne et un écart-type EWMA, ré-estimés à chaque heure.
-La fenêtre EWMA est proportionnelle à la demi-vie OU de la paire (estimée sur la
-période d'apprentissage).
+Replaces the static z-score thresholds of the original paper (computed once on the
+whole history) with an EWMA mean and standard deviation, re-estimated every hour.
+The EWMA window is proportional to the pair's OU half-life (estimated on the
+training period).
 
-Les bandes EWMA sont causales : la valeur à l'heure t n'utilise que les données
-jusqu'à t. Le signal est ensuite décalé de EXECUTION_LAG_HOURS : un signal observé
-à t n'est exécuté qu'à t + lag (on ne peut pas trader au prix qui a déclenché le signal).
+The EWMA bands are causal: the value at hour t only uses data up to t. The signal is
+then shifted by EXECUTION_LAG_HOURS: a signal observed at t is only executed at t + lag
+(you cannot trade at the price that triggered the signal).
 
-Seules les paires dont le spread est stationnaire sur la période d'apprentissage
-sont tradées : stETH/ETH et USDC/USDT. AAVE/ETH est exclue (ADF non significatif).
+Only pairs whose spread is stationary over the training period are traded:
+stETH/ETH and USDC/USDT. AAVE/ETH is excluded (ADF not significant).
 """
 
 import numpy as np
@@ -20,15 +20,15 @@ import pandas as pd
 from config import EXECUTION_LAG_HOURS
 from cointegration_ou import run_pipeline, principal_row
 
-EWMA_HALFLIFE_MULTIPLIER = 10   # fenêtre EWMA = 10 x la demi-vie OU de la paire
-# Seuil d'entrée choisi sur la période d'APPRENTISSAGE uniquement
-# (cf. sensitivity_frequency.py) ; la période de test n'a pas servi à le choisir.
+EWMA_HALFLIFE_MULTIPLIER = 10   # EWMA window = 10 x the pair's OU half-life
+# Entry threshold chosen on the TRAINING period only
+# (see sensitivity_frequency.py); the test period was not used to pick it.
 ENTRY_Z = 4.0
 EXIT_Z = 0.5
-MIN_BURN_IN_HOURS = 48          # pas de signal tant que l'EWMA n'est pas stabilisée
+MIN_BURN_IN_HOURS = 48          # no signal until the EWMA has stabilised
 
 TRADABLE_PAIRS = ["stETH_ETH", "USDC_USDT"]
-EXCLUDED_PAIRS = {"AAVE_ETH": "ADF non significatif sur la période d'apprentissage"}
+EXCLUDED_PAIRS = {"AAVE_ETH": "ADF not significant on the training period"}
 
 
 def ewma_bands(spread: pd.Series, halflife_hours: float):
@@ -37,10 +37,10 @@ def ewma_bands(spread: pd.Series, halflife_hours: float):
 
 
 def generate_signal(spread, mean, std, entry_z=ENTRY_Z, exit_z=EXIT_Z, burn_in=MIN_BURN_IN_HOURS):
-    """Machine à états sur le z-score :
-       z >  entry_z -> position -1 (short le spread : vendre Y, acheter X)
-       z < -entry_z -> position +1 (long le spread)
-       |z| < exit_z -> sortie (0) ; sinon on conserve la position."""
+    """State machine on the z-score:
+       z >  entry_z -> position -1 (short the spread: sell Y, buy X)
+       z < -entry_z -> position +1 (long the spread)
+       |z| < exit_z -> exit (0); otherwise the position is kept."""
     z = (spread - mean) / std
     position = np.zeros(len(spread), dtype=int)
     pos = 0
@@ -60,7 +60,7 @@ def generate_signal(spread, mean, std, entry_z=ENTRY_Z, exit_z=EXIT_Z, burn_in=M
 
 
 def execute(signal_position: pd.Series, lag=EXECUTION_LAG_HOURS) -> pd.Series:
-    """Position effectivement détenue : le signal de l'heure t est exécuté à t + lag."""
+    """Position actually held: the signal of hour t is executed at t + lag."""
     return signal_position.shift(lag).fillna(0).astype(int)
 
 
@@ -77,8 +77,8 @@ def trade_stats(position: pd.Series):
         runs.append(run)
     return {
         "n_trades": int(entries.sum()),
-        "pct_temps_en_position": float((position != 0).mean()),
-        "duree_moyenne_h": float(np.mean(runs)) if runs else 0.0,
+        "pct_time_in_position": float((position != 0).mean()),
+        "avg_duration_h": float(np.mean(runs)) if runs else 0.0,
     }
 
 
@@ -103,11 +103,11 @@ def run_signal_pipeline(entry_z=ENTRY_Z, exit_z=EXIT_Z, lag=EXECUTION_LAG_HOURS)
 
 if __name__ == "__main__":
     out, *_ = run_signal_pipeline()
-    print(f"Seuils : entrée |z| > {ENTRY_Z}, sortie |z| < {EXIT_Z}, délai d'exécution = {EXECUTION_LAG_HOURS} h")
+    print(f"Thresholds: entry |z| > {ENTRY_Z}, exit |z| < {EXIT_Z}, execution lag = {EXECUTION_LAG_HOURS} h")
     for pair, d in out.items():
         s = d["stats"]
         print(f"\n=== {pair} ===")
-        print(f"  demi-vie OU = {d['ou_half_life_h']:.2f} h -> fenêtre EWMA = {d['halflife_ewma_h']:.1f} h")
-        print(f"  trades = {s['n_trades']} | temps en position = {s['pct_temps_en_position']*100:.1f} % | "
-              f"durée moyenne = {s['duree_moyenne_h']:.1f} h")
-    print("\nPaires exclues :", EXCLUDED_PAIRS)
+        print(f"  OU half-life = {d['ou_half_life_h']:.2f} h -> EWMA window = {d['halflife_ewma_h']:.1f} h")
+        print(f"  trades = {s['n_trades']} | time in position = {s['pct_time_in_position']*100:.1f}% | "
+              f"average duration = {s['avg_duration_h']:.1f} h")
+    print("\nExcluded pairs:", EXCLUDED_PAIRS)

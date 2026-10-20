@@ -1,4 +1,4 @@
-"""Exécute tout le pipeline dans l'ordre (hors téléchargement des données)."""
+"""Runs the whole pipeline in order (except the data download)."""
 
 import runpy
 from pathlib import Path

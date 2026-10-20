@@ -1,12 +1,12 @@
 """
-Étude de robustesse : Sharpe net (après frictions) en fonction du seuil d'entrée.
+Robustness study: net Sharpe ratio (after frictions) as a function of the entry threshold.
 
-Hypothèse testée : un seuil plus élevé réduit la fréquence de trading, donc le poids
-des frais (gas fixe, fee et slippage proportionnels) par rapport au PnL capturé.
+Hypothesis tested: a higher threshold lowers trading frequency, and therefore the weight
+of costs (fixed gas, proportional fees and slippage) relative to the captured PnL.
 
-Le seuil est CHOISI sur la période d'apprentissage uniquement (Sharpe net moyen des
-deux paires). Les résultats sur la période de test sont affichés à côté pour vérifier
-que le choix tient hors échantillon — ils ne servent pas à la sélection.
+The threshold is CHOSEN on the training period only (average net Sharpe of the two
+pairs). Test-period results are shown next to it to check that the choice holds out of
+sample; they are not used for the selection.
 """
 
 import pandas as pd
@@ -32,13 +32,13 @@ def run_sensitivity(lag=EXECUTION_LAG_HOURS):
             bt = backtest_pair(pair, spreads[pair], d["position"], notional,
                                volumes[PAIR_VOLUME_ASSET[pair]], prices["ETH"])
             for m in split_metrics(bt, notional):
-                rows.append({"paire": pair, "entry_z": entry_z, **m})
+                rows.append({"pair": pair, "entry_z": entry_z, **m})
     return pd.DataFrame(rows)
 
 
 def select_threshold(df):
-    """Seuil maximisant le Sharpe net moyen des paires, sur l'apprentissage seulement."""
-    train_net = df[(df.periode == "apprentissage") & (df["mode"] == "net")]
+    """Threshold maximising the average net Sharpe of the pairs, on the training period only."""
+    train_net = df[(df.period == "train") & (df["mode"] == "net")]
     return train_net.groupby("entry_z")["sharpe"].mean().idxmax()
 
 
@@ -48,13 +48,13 @@ if __name__ == "__main__":
     df.to_csv(OUTPUT_DIR / "sensitivity_frequency.csv", index=False)
 
     view = (df[df["mode"] == "net"]
-            .pivot_table(index=["paire", "entry_z"], columns="periode", values=["sharpe", "n_trades"])
+            .pivot_table(index=["pair", "entry_z"], columns="period", values=["sharpe", "n_trades"])
             .round(2))
     pd.set_option("display.width", 160)
-    print("Sharpe net et nombre de trades, par période :\n")
+    print("Net Sharpe ratio and number of trades, by period:\n")
     print(view.to_string())
 
     best = select_threshold(df)
-    print(f"\nSeuil retenu sur l'apprentissage : {best}  (valeur utilisée dans signal_generation.py : {ENTRY_Z})")
+    print(f"\nThreshold selected on the training period: {best}  (value used in signal_generation.py: {ENTRY_Z})")
     if best != ENTRY_Z:
-        print("ATTENTION : mettre à jour ENTRY_Z dans signal_generation.py.")
+        print("WARNING: update ENTRY_Z in signal_generation.py.")
